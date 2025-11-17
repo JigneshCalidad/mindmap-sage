@@ -5,8 +5,8 @@ the graph structure, export formats, and trigger scans. Think of it
 as a window into the living mindmap.
 """
 
-import os
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -15,15 +15,35 @@ from fastapi.responses import PlainTextResponse
 from mindmap.core import MindmapBuilder
 from mindmap.exporter import Exporter
 
+
+class AppState:
+    """Thread-safe application state container."""
+
+    def __init__(self):
+        self.builder = MindmapBuilder()
+        self.current_repo_path: Optional[Path] = None
+        self._lock = Lock()
+
+    def build_from_directory(self, path: Path):
+        """Thread-safe build operation."""
+        with self._lock:
+            self.builder.build_from_directory(path)
+            self.current_repo_path = path
+
+    def get_graph(self):
+        """Thread-safe graph access."""
+        with self._lock:
+            return self.builder.get_graph()
+
+
 app = FastAPI(
     title="Mindmap Sage API",
     description="API for querying and exporting codebase mindmaps",
     version="0.1.0",
 )
 
-# Global state
-builder = MindmapBuilder()
-current_repo_path: Optional[Path] = None
+# Application state
+state = AppState()
 
 
 @app.get("/")
@@ -48,12 +68,10 @@ async def scan_repository(repo_path: Optional[str] = None):
     Args:
         repo_path: Path to repository. If not provided, uses current directory.
     """
-    global current_repo_path
-
     if repo_path:
         path = Path(repo_path)
-    elif current_repo_path:
-        path = current_repo_path
+    elif state.current_repo_path:
+        path = state.current_repo_path
     else:
         path = Path.cwd()
 
@@ -61,9 +79,8 @@ async def scan_repository(repo_path: Optional[str] = None):
         raise HTTPException(status_code=404, detail=f"Path not found: {path}")
 
     try:
-        builder.build_from_directory(path)
-        current_repo_path = path
-        graph = builder.get_graph()
+        state.build_from_directory(path)
+        graph = state.get_graph()
 
         return {
             "status": "success",
@@ -78,7 +95,7 @@ async def scan_repository(repo_path: Optional[str] = None):
 @app.get("/graph")
 async def get_graph():
     """Get the current graph as JSON."""
-    graph = builder.get_graph()
+    graph = state.get_graph()
 
     if graph.number_of_nodes() == 0:
         raise HTTPException(
@@ -96,7 +113,7 @@ async def get_mermaid(direction: str = "TD"):
     Args:
         direction: Graph direction (TD, LR, RL, BT)
     """
-    graph = builder.get_graph()
+    graph = state.get_graph()
 
     if graph.number_of_nodes() == 0:
         raise HTTPException(
@@ -110,9 +127,10 @@ async def get_mermaid(direction: str = "TD"):
 @app.get("/health")
 async def health():
     """Health check endpoint."""
+    graph = state.get_graph()
     return {
         "status": "healthy",
-        "has_graph": builder.get_graph().number_of_nodes() > 0,
-        "current_repo": str(current_repo_path) if current_repo_path else None,
+        "has_graph": graph.number_of_nodes() > 0,
+        "current_repo": str(state.current_repo_path) if state.current_repo_path else None,
     }
 
