@@ -1,7 +1,8 @@
 """Service module for handling business logic."""
 
 from typing import List, Optional
-from models import User, Product
+
+from .models import User, Product
 
 
 class UserService:
