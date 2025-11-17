@@ -9,7 +9,7 @@ import ast
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 
 class Parser:
@@ -31,7 +31,7 @@ class Parser:
         parts = path.parts
         return any(ignore in parts for ignore in self.ignore_patterns)
 
-    def parse_file(self, file_path: Path) -> Dict[str, any]:
+    def parse_file(self, file_path: Path) -> Dict[str, Any]:
         """Parse a single file and extract its concepts."""
         if not file_path.exists():
             return {}
@@ -47,7 +47,7 @@ class Parser:
             return self._parse_java(file_path)
         return {}
 
-    def _parse_python(self, file_path: Path) -> Dict[str, any]:
+    def _parse_python(self, file_path: Path) -> Dict[str, Any]:
         """Parse Python file using AST."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -126,7 +126,7 @@ class Parser:
             "imports": list(set(imports)),
         }
 
-    def _parse_javascript(self, file_path: Path) -> Dict[str, any]:
+    def _parse_javascript(self, file_path: Path) -> Dict[str, Any]:
         """Parse JavaScript file using regex patterns."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -183,7 +183,7 @@ class Parser:
             "imports": list(set(imports)),
         }
 
-    def _parse_markdown(self, file_path: Path) -> Dict[str, any]:
+    def _parse_markdown(self, file_path: Path) -> Dict[str, Any]:
         """Parse Markdown file for headings and structure."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -213,7 +213,7 @@ class Parser:
             "imports": [],
         }
 
-    def _parse_java(self, file_path: Path) -> Dict[str, any]:
+    def _parse_java(self, file_path: Path) -> Dict[str, Any]:
         """Parse Java file using regex patterns."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -270,7 +270,7 @@ class Parser:
             "imports": list(set(imports)),
         }
 
-    def scan_directory(self, root_path: Path) -> List[Dict[str, any]]:
+    def scan_directory(self, root_path: Path) -> List[Dict[str, Any]]:
         """Scan a directory recursively and parse all supported files."""
         results = []
         root_path = Path(root_path).resolve()

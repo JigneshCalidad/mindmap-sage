@@ -5,7 +5,6 @@ the graph structure, export formats, and trigger scans. Think of it
 as a window into the living mindmap.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 
