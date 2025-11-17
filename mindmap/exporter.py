@@ -7,7 +7,7 @@ and formats it for human-readable visualization.
 
 import networkx as nx
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 class Exporter:
@@ -61,22 +61,30 @@ class Exporter:
 
         return "\n".join(lines)
 
-    def _format_label(self, node: str, node_data: dict) -> str:
+    def _format_label(self, node: str, node_data: Dict[str, Any]) -> str:
         """Format node label for display."""
         node_type = node_data.get("type", "unknown")
         name = node_data.get("name", node)
 
         if node_type == "file":
             # Show just the filename
-            return Path(node).name if "/" in node else node
+            label = Path(node).name if "/" in node else node
         elif node_type in ["class", "function", "method"]:
-            return f"{node_type}: {name}"
+            label = f"{node_type}: {name}"
         elif node_type.startswith("heading"):
-            return f"📄 {name}"
+            label = f"📄 {name}"
         elif node_type == "todo":
-            return f"✓ {name}"
+            label = f"✓ {name}"
         else:
-            return name
+            label = name
+
+        # Escape special characters for Mermaid
+        return self._escape_mermaid_label(label)
+
+    def _escape_mermaid_label(self, label: str) -> str:
+        """Escape special characters in Mermaid labels."""
+        # Replace quotes and other special characters that could break Mermaid syntax
+        return label.replace('"', '&quot;').replace("'", "&#39;")
 
     def _get_shape(self, node_type: str) -> str:
         """Get Mermaid shape based on node type."""
@@ -101,7 +109,7 @@ class Exporter:
         else:
             return "-->"
 
-    def to_json(self) -> dict:
+    def to_json(self) -> Dict[str, Any]:
         """Export graph to JSON format."""
         nodes = []
         edges = []

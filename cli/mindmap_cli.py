@@ -5,8 +5,10 @@ exporting mindmaps, and serving the API. It's the primary interface
 for interacting with the bot.
 """
 
+import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import click
 
@@ -36,7 +38,7 @@ def main():
     default="mermaid",
     help="Output format",
 )
-def scan(repo_path: Path, output: Path, format: str):
+def scan(repo_path: Path, output: Optional[Path], format: str) -> None:
     """Scan a repository and generate a mindmap.
 
     REPO_PATH: Path to the repository to scan
@@ -58,8 +60,6 @@ def scan(repo_path: Path, output: Path, format: str):
         if format.lower() == "mermaid":
             result = exporter.to_mermaid()
         else:
-            import json
-
             result = json.dumps(exporter.to_json(), indent=2)
 
         if output:
@@ -90,7 +90,7 @@ def scan(repo_path: Path, output: Path, format: str):
     type=click.Path(exists=True, path_type=Path),
     help="Initial repository path to scan",
 )
-def serve(host: str, port: int, repo_path: Path):
+def serve(host: str, port: int, repo_path: Optional[Path]) -> None:
     """Start the FastAPI server."""
     import uvicorn
 
@@ -126,7 +126,7 @@ def serve(host: str, port: int, repo_path: Path):
     default="TD",
     help="Mermaid graph direction (only for mermaid format)",
 )
-def export(format: str, output: Path, direction: str):
+def export(format: str, output: Optional[Path], direction: str) -> None:
     """Export the current mindmap (requires a running server or previous scan).
 
     Note: This command currently requires the graph to be built first via scan.

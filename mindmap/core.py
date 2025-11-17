@@ -7,7 +7,7 @@ represent relationships (imports, dependencies, containment).
 
 import networkx as nx
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .parser import Parser
 
@@ -56,32 +56,19 @@ class MindmapBuilder:
                 # Link concept to its file
                 self.graph.add_edge(concept_id, file_node, relation="defined_in")
 
-            # Add import relationships
-            for import_name in file_data.get("imports", []):
-                # Try to find the imported module/file in the graph
-                for node in self.graph.nodes():
-                    if (
-                        self.graph.nodes[node].get("type") == "file"
-                        and import_name in node
-                    ):
-                        self.graph.add_edge(
-                            file_node, node, relation="imports"
-                        )
-                        break
-
         # Add cross-file relationships based on imports
         self._add_import_relationships(parsed_files, root_path)
 
         return self.graph
 
     def _add_import_relationships(
-        self, parsed_files: List[Dict], root_path: Path
-    ):
+        self, parsed_files: List[Dict[str, Any]], root_path: Path
+    ) -> None:
         """Add edges based on import statements."""
         root_path = Path(root_path).resolve()
 
         # Build a map of module names to file nodes
-        module_to_file = {}
+        module_to_file: Dict[str, str] = {}
         for file_data in parsed_files:
             file_path = Path(file_data["file"])
             relative_path = file_path.relative_to(root_path)
@@ -114,7 +101,7 @@ class MindmapBuilder:
         """Get the current graph."""
         return self.graph
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear the graph."""
         self.graph.clear()
 
