@@ -56,19 +56,6 @@ class MindmapBuilder:
                 # Link concept to its file
                 self.graph.add_edge(concept_id, file_node, relation="defined_in")
 
-            # Add import relationships
-            for import_name in file_data.get("imports", []):
-                # Try to find the imported module/file in the graph
-                for node in self.graph.nodes():
-                    if (
-                        self.graph.nodes[node].get("type") == "file"
-                        and import_name in node
-                    ):
-                        self.graph.add_edge(
-                            file_node, node, relation="imports"
-                        )
-                        break
-
         # Add cross-file relationships based on imports
         self._add_import_relationships(parsed_files, root_path)
 
