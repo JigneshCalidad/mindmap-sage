@@ -93,19 +93,30 @@ def scan(repo_path: Path, output: Path, format: str):
 def serve(host: str, port: int, repo_path: Path):
     """Start the FastAPI server."""
     import uvicorn
+    from app.main import builder
 
     if repo_path:
         click.echo(f"Scanning initial repository: {repo_path}", err=True)
-        builder = MindmapBuilder()
-        builder.build_from_directory(repo_path)
-        # Note: This creates a new builder instance, not the one in app.main
-        # In a real scenario, you might want to share state differently
+        try:
+            builder.build_from_directory(repo_path)
+            # Update the global current_repo_path in app.main
+            import app.main as app_module
+            app_module.current_repo_path = repo_path
+            graph = builder.get_graph()
+            click.echo(
+                f"Scanned: {graph.number_of_nodes()} nodes, "
+                f"{graph.number_of_edges()} edges",
+                err=True,
+            )
+        except Exception as e:
+            click.echo(f"Warning: Failed to scan repository: {e}", err=True)
 
     click.echo(f"Starting server at http://{host}:{port}", err=True)
     uvicorn.run("app.main:app", host=host, port=port, reload=False)
 
 
 @main.command()
+@click.argument("repo_path", type=click.Path(exists=True, path_type=Path), required=False)
 @click.option(
     "--format",
     "-f",
@@ -126,15 +137,47 @@ def serve(host: str, port: int, repo_path: Path):
     default="TD",
     help="Mermaid graph direction (only for mermaid format)",
 )
-def export(format: str, output: Path, direction: str):
-    """Export the current mindmap (requires a running server or previous scan).
+def export(repo_path: Path, format: str, output: Path, direction: str):
+    """Export a mindmap from a repository.
 
-    Note: This command currently requires the graph to be built first via scan.
+    REPO_PATH: Path to the repository to scan and export (optional if graph already built)
     """
-    click.echo("Export command - requires graph to be built first", err=True)
-    click.echo(
-        "Use 'mindmap scan <repo_path>' to build a graph first", err=True
-    )
+    import json
+
+    try:
+        builder = MindmapBuilder()
+
+        if repo_path:
+            click.echo(f"Scanning repository: {repo_path}", err=True)
+            builder.build_from_directory(repo_path)
+        else:
+            click.echo(
+                "No repository path provided. Use 'mindmap scan <repo_path>' first or provide REPO_PATH.",
+                err=True,
+            )
+            sys.exit(1)
+
+        graph = builder.get_graph()
+
+        if graph.number_of_nodes() == 0:
+            click.echo("Warning: No nodes found in the graph.", err=True)
+
+        exporter = Exporter(graph)
+
+        if format.lower() == "mermaid":
+            result = exporter.to_mermaid(direction=direction)
+        else:
+            result = json.dumps(exporter.to_json(), indent=2)
+
+        if output:
+            output.write_text(result, encoding="utf-8")
+            click.echo(f"Exported to: {output}", err=True)
+        else:
+            click.echo(result)
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

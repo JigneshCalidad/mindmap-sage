@@ -7,7 +7,7 @@ and formats it for human-readable visualization.
 
 import networkx as nx
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 
 class Exporter:
@@ -61,7 +61,7 @@ class Exporter:
 
         return "\n".join(lines)
 
-    def _format_label(self, node: str, node_data: dict) -> str:
+    def _format_label(self, node: str, node_data: Dict[str, Any]) -> str:
         """Format node label for display."""
         node_type = node_data.get("type", "unknown")
         name = node_data.get("name", node)
@@ -101,7 +101,7 @@ class Exporter:
         else:
             return "-->"
 
-    def to_json(self) -> dict:
+    def to_json(self) -> Dict[str, Any]:
         """Export graph to JSON format."""
         nodes = []
         edges = []

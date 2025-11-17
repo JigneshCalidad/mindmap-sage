@@ -7,7 +7,7 @@ represent relationships (imports, dependencies, containment).
 
 import networkx as nx
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .parser import Parser
 
@@ -75,8 +75,8 @@ class MindmapBuilder:
         return self.graph
 
     def _add_import_relationships(
-        self, parsed_files: List[Dict], root_path: Path
-    ):
+        self, parsed_files: List[Dict[str, Any]], root_path: Path
+    ) -> None:
         """Add edges based on import statements."""
         root_path = Path(root_path).resolve()
 
@@ -114,7 +114,7 @@ class MindmapBuilder:
         """Get the current graph."""
         return self.graph
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear the graph."""
         self.graph.clear()
 

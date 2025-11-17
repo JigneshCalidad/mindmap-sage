@@ -5,7 +5,6 @@ the graph structure, export formats, and trigger scans. Think of it
 as a window into the living mindmap.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -51,14 +50,34 @@ async def scan_repository(repo_path: Optional[str] = None):
     global current_repo_path
 
     if repo_path:
-        path = Path(repo_path)
+        # Resolve path to prevent path traversal attacks
+        try:
+            path = Path(repo_path).resolve()
+        except (ValueError, OSError) as e:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid path: {str(e)}"
+            )
+
+        # Security: Ensure path is absolute and exists
+        if not path.is_absolute():
+            raise HTTPException(
+                status_code=400, detail="Path must be absolute"
+            )
+
+        # Additional security: Check if path exists and is a directory
+        if not path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Path not found: {path}"
+            )
+
+        if not path.is_dir():
+            raise HTTPException(
+                status_code=400, detail=f"Path must be a directory: {path}"
+            )
     elif current_repo_path:
         path = current_repo_path
     else:
         path = Path.cwd()
-
-    if not path.exists():
-        raise HTTPException(status_code=404, detail=f"Path not found: {path}")
 
     try:
         builder.build_from_directory(path)
@@ -71,6 +90,10 @@ async def scan_repository(repo_path: Optional[str] = None):
             "nodes": graph.number_of_nodes(),
             "edges": graph.number_of_edges(),
         }
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=403, detail=f"Permission denied: {str(e)}"
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
 
