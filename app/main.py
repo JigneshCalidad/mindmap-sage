@@ -5,9 +5,8 @@ the graph structure, export formats, and trigger scans. Think of it
 as a window into the living mindmap.
 """
 
-import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -27,7 +26,7 @@ current_repo_path: Optional[Path] = None
 
 
 @app.get("/")
-async def root():
+async def root() -> Dict[str, Any]:
     """Root endpoint with API information."""
     return {
         "name": "Mindmap Sage API",
@@ -42,7 +41,7 @@ async def root():
 
 
 @app.post("/scan")
-async def scan_repository(repo_path: Optional[str] = None):
+async def scan_repository(repo_path: Optional[str] = None) -> Dict[str, Any]:
     """Scan a repository and build the mindmap.
 
     Args:
@@ -76,7 +75,7 @@ async def scan_repository(repo_path: Optional[str] = None):
 
 
 @app.get("/graph")
-async def get_graph():
+async def get_graph() -> Dict[str, Any]:
     """Get the current graph as JSON."""
     graph = builder.get_graph()
 
@@ -90,7 +89,7 @@ async def get_graph():
 
 
 @app.get("/mermaid", response_class=PlainTextResponse)
-async def get_mermaid(direction: str = "TD"):
+async def get_mermaid(direction: str = "TD") -> str:
     """Get the current graph as a Mermaid diagram.
 
     Args:
@@ -108,7 +107,7 @@ async def get_mermaid(direction: str = "TD"):
 
 
 @app.get("/health")
-async def health():
+async def health() -> Dict[str, Any]:
     """Health check endpoint."""
     return {
         "status": "healthy",

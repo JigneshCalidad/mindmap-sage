@@ -6,10 +6,9 @@ as a gentle reader that understands code structure without executing it.
 """
 
 import ast
-import os
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, List
 
 
 class Parser:
@@ -31,7 +30,7 @@ class Parser:
         parts = path.parts
         return any(ignore in parts for ignore in self.ignore_patterns)
 
-    def parse_file(self, file_path: Path) -> Dict[str, any]:
+    def parse_file(self, file_path: Path) -> Dict[str, Any]:
         """Parse a single file and extract its concepts."""
         if not file_path.exists():
             return {}
@@ -47,7 +46,7 @@ class Parser:
             return self._parse_java(file_path)
         return {}
 
-    def _parse_python(self, file_path: Path) -> Dict[str, any]:
+    def _parse_python(self, file_path: Path) -> Dict[str, Any]:
         """Parse Python file using AST."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -77,10 +76,10 @@ class Parser:
 
         # Use a visitor to track class context with proper nesting
         class FunctionVisitor(ast.NodeVisitor):
-            def __init__(self):
-                self.class_stack = []
+            def __init__(self) -> None:
+                self.class_stack: List[ast.ClassDef] = []
 
-            def visit_ClassDef(self, node):
+            def visit_ClassDef(self, node: ast.ClassDef) -> None:
                 self.class_stack.append(node)
                 concepts.append(
                     {
@@ -92,7 +91,7 @@ class Parser:
                 self.generic_visit(node)
                 self.class_stack.pop()
 
-            def visit_FunctionDef(self, node):
+            def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
                 # Check if we're inside a class by checking the stack
                 if not self.class_stack:
                     # Top-level function
@@ -126,7 +125,7 @@ class Parser:
             "imports": list(set(imports)),
         }
 
-    def _parse_javascript(self, file_path: Path) -> Dict[str, any]:
+    def _parse_javascript(self, file_path: Path) -> Dict[str, Any]:
         """Parse JavaScript file using regex patterns."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -183,7 +182,7 @@ class Parser:
             "imports": list(set(imports)),
         }
 
-    def _parse_markdown(self, file_path: Path) -> Dict[str, any]:
+    def _parse_markdown(self, file_path: Path) -> Dict[str, Any]:
         """Parse Markdown file for headings and structure."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -213,7 +212,7 @@ class Parser:
             "imports": [],
         }
 
-    def _parse_java(self, file_path: Path) -> Dict[str, any]:
+    def _parse_java(self, file_path: Path) -> Dict[str, Any]:
         """Parse Java file using regex patterns."""
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -270,7 +269,7 @@ class Parser:
             "imports": list(set(imports)),
         }
 
-    def scan_directory(self, root_path: Path) -> List[Dict[str, any]]:
+    def scan_directory(self, root_path: Path) -> List[Dict[str, Any]]:
         """Scan a directory recursively and parse all supported files."""
         results = []
         root_path = Path(root_path).resolve()

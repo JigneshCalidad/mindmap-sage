@@ -5,11 +5,12 @@ the mindmap when files are modified, added, or removed. It provides
 a reactive layer that keeps the mindmap in sync with the codebase.
 """
 
-import time
+import threading
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, Type
 
-from watchdog.events import FileSystemEventHandler
+import networkx as nx
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 from mindmap.core import MindmapBuilder
@@ -22,9 +23,9 @@ class MindmapWatcher:
         self,
         repo_path: Path,
         builder: MindmapBuilder,
-        on_update: Optional[Callable] = None,
+        on_update: Optional[Callable[[nx.DiGraph], None]] = None,
         debounce_seconds: float = 1.0,
-    ):
+    ) -> None:
         """Initialize watcher.
 
         Args:
@@ -38,18 +39,11 @@ class MindmapWatcher:
         self.on_update = on_update
         self.debounce_seconds = debounce_seconds
         self.observer = None
-        self.last_update_time = 0
         self.pending_update = False
+        self._update_timer: Optional[threading.Timer] = None
+        self._lock = threading.Lock()
 
-    def _should_rebuild(self) -> bool:
-        """Check if enough time has passed since last update."""
-        current_time = time.time()
-        if current_time - self.last_update_time >= self.debounce_seconds:
-            self.last_update_time = current_time
-            return True
-        return False
-
-    def _rebuild(self):
+    def _rebuild(self) -> None:
         """Rebuild the mindmap."""
         try:
             self.builder.build_from_directory(self.repo_path)
@@ -65,7 +59,7 @@ class MindmapWatcher:
         except Exception as e:
             print(f"Error rebuilding mindmap: {e}")
 
-    def _handle_event(self, event):
+    def _handle_event(self, event) -> None:
         """Handle file system event."""
         if event.is_directory:
             return
@@ -75,13 +69,28 @@ class MindmapWatcher:
         if file_path.suffix.lower() not in {".py", ".js", ".md", ".java"}:
             return
 
-        # Debounce rapid changes
-        if self._should_rebuild():
-            self._rebuild()
-        else:
+        # Debounce rapid changes using a timer
+        with self._lock:
             self.pending_update = True
+            # Cancel existing timer if any
+            if self._update_timer:
+                self._update_timer.cancel()
+            # Schedule rebuild after debounce period
+            self._update_timer = threading.Timer(
+                self.debounce_seconds, self._process_pending_update
+            )
+            self._update_timer.start()
 
-    def start(self):
+    def _process_pending_update(self) -> None:
+        """Process pending update after debounce period."""
+        with self._lock:
+            if self.pending_update:
+                self.pending_update = False
+                self._rebuild()
+            if self._update_timer:
+                self._update_timer = None
+
+    def start(self) -> None:
         """Start watching the directory."""
         if not self.repo_path.exists():
             raise ValueError(f"Path does not exist: {self.repo_path}")
@@ -96,19 +105,28 @@ class MindmapWatcher:
 
         print(f"Watching: {self.repo_path}")
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop watching."""
+        with self._lock:
+            if self._update_timer:
+                self._update_timer.cancel()
+                self._update_timer = None
         if self.observer:
             self.observer.stop()
             self.observer.join()
             print("Watcher stopped")
 
-    def __enter__(self):
+    def __enter__(self) -> "MindmapWatcher":
         """Context manager entry."""
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> None:
         """Context manager exit."""
         self.stop()
 
@@ -116,15 +134,15 @@ class MindmapWatcher:
 class _MindmapEventHandler(FileSystemEventHandler):
     """Internal event handler for watchdog."""
 
-    def __init__(self, callback: Callable):
+    def __init__(self, callback: Callable[[FileSystemEvent], None]) -> None:
         self.callback = callback
 
-    def on_modified(self, event):
+    def on_modified(self, event: FileSystemEvent) -> None:
         self.callback(event)
 
-    def on_created(self, event):
+    def on_created(self, event: FileSystemEvent) -> None:
         self.callback(event)
 
-    def on_deleted(self, event):
+    def on_deleted(self, event: FileSystemEvent) -> None:
         self.callback(event)
 
