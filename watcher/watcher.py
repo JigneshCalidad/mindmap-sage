@@ -7,6 +7,7 @@ a reactive layer that keeps the mindmap in sync with the codebase.
 
 import time
 from pathlib import Path
+from threading import Lock, Timer
 from typing import Callable, Optional
 
 from watchdog.events import FileSystemEventHandler
@@ -38,22 +39,16 @@ class MindmapWatcher:
         self.on_update = on_update
         self.debounce_seconds = debounce_seconds
         self.observer = None
-        self.last_update_time = 0
-        self.pending_update = False
-
-    def _should_rebuild(self) -> bool:
-        """Check if enough time has passed since last update."""
-        current_time = time.time()
-        if current_time - self.last_update_time >= self.debounce_seconds:
-            self.last_update_time = current_time
-            return True
-        return False
+        self.last_update_time = 0.0
+        self._debounce_timer: Optional[Timer] = None
+        self._timer_lock = Lock()
 
     def _rebuild(self):
         """Rebuild the mindmap."""
         try:
             self.builder.build_from_directory(self.repo_path)
             graph = self.builder.get_graph()
+            self.last_update_time = time.time()
 
             if self.on_update:
                 self.on_update(graph)
@@ -76,10 +71,15 @@ class MindmapWatcher:
             return
 
         # Debounce rapid changes
-        if self._should_rebuild():
+        now = time.time()
+        elapsed = now - self.last_update_time
+
+        if elapsed >= self.debounce_seconds:
+            self._cancel_pending_timer()
             self._rebuild()
         else:
-            self.pending_update = True
+            remaining = self.debounce_seconds - elapsed
+            self._schedule_rebuild(delay=remaining)
 
     def start(self):
         """Start watching the directory."""
@@ -102,6 +102,7 @@ class MindmapWatcher:
             self.observer.stop()
             self.observer.join()
             print("Watcher stopped")
+        self._cancel_pending_timer()
 
     def __enter__(self):
         """Context manager entry."""
@@ -111,6 +112,30 @@ class MindmapWatcher:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.stop()
+
+    def _schedule_rebuild(self, delay: Optional[float] = None):
+        """Schedule a rebuild after the debounce period."""
+        wait_time = self.debounce_seconds if delay is None else max(delay, 0)
+        with self._timer_lock:
+            if self._debounce_timer:
+                self._debounce_timer.cancel()
+            timer = Timer(wait_time, self._run_scheduled_rebuild)
+            timer.daemon = True
+            timer.start()
+            self._debounce_timer = timer
+
+    def _run_scheduled_rebuild(self):
+        """Execute a rebuild triggered by the debounce timer."""
+        with self._timer_lock:
+            self._debounce_timer = None
+        self._rebuild()
+
+    def _cancel_pending_timer(self):
+        """Cancel any pending debounce timer."""
+        with self._timer_lock:
+            if self._debounce_timer:
+                self._debounce_timer.cancel()
+                self._debounce_timer = None
 
 
 class _MindmapEventHandler(FileSystemEventHandler):

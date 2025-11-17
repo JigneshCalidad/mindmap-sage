@@ -6,10 +6,9 @@ as a gentle reader that understands code structure without executing it.
 """
 
 import ast
-import os
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List
 
 
 class Parser:
@@ -62,10 +61,10 @@ class Parser:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    imports.append(alias.name.split(".")[0])
+                    imports.append(alias.name)
             elif isinstance(node, ast.ImportFrom):
                 if node.module:
-                    imports.append(node.module.split(".")[0])
+                    imports.append(node.module)
                 for alias in node.names:
                     concepts.append(
                         {
@@ -140,7 +139,7 @@ class Parser:
         # Extract imports
         import_pattern = r"import\s+(?:(?:\{[^}]+\}|\*\s+as\s+\w+|\w+)\s+from\s+)?['\"]([^'\"]+)['\"]"
         for match in re.finditer(import_pattern, content):
-            imports.append(match.group(1).split("/")[0])
+            imports.append(match.group(1))
 
         # Extract classes
         class_pattern = r"class\s+(\w+)(?:\s+extends\s+\w+)?\s*\{"
@@ -227,7 +226,7 @@ class Parser:
         # Extract imports
         import_pattern = r"import\s+(?:static\s+)?([\w.]+)\s*;"
         for match in re.finditer(import_pattern, content):
-            imports.append(match.group(1).split(".")[0])
+            imports.append(match.group(1))
 
         # Extract classes and interfaces
         class_pattern = r"(?:public\s+)?(?:abstract\s+)?(?:class|interface|enum)\s+(\w+)"

@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from mindmap.core import MindmapBuilder
 
 
@@ -107,6 +105,63 @@ def test_import_relationships():
 
         # Check for import edges
         edges = list(graph.edges(data=True))
-        import_edges = [e for _, _, d in edges if d.get("relation") == "imports"]
+        import_edges = [
+            (source, target, data)
+            for source, target, data in edges
+            if data.get("relation") == "imports"
+        ]
         assert len(import_edges) > 0
+
+
+def test_package_import_resolves_to_init():
+    """Ensure importing a package targets its __init__.py file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        package_dir = tmp_path / "pkg"
+        package_dir.mkdir()
+
+        create_sample_python_file(package_dir, "__init__.py", "")
+        create_sample_python_file(
+            tmp_path,
+            "consumer.py",
+            "import pkg\n",
+        )
+
+        builder = MindmapBuilder()
+        graph = builder.build_from_directory(tmp_path)
+
+        import_edges = [
+            (source, target)
+            for source, target, data in graph.edges(data=True)
+            if data.get("relation") == "imports"
+        ]
+
+        assert ("consumer.py", "pkg/__init__.py") in import_edges
+
+
+def test_submodule_import_resolves_to_file():
+    """Ensure dotted imports point to the concrete module file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        package_dir = tmp_path / "pkg"
+        package_dir.mkdir()
+
+        create_sample_python_file(package_dir, "__init__.py", "")
+        create_sample_python_file(package_dir, "helpers.py", "def helper():\n    pass\n")
+        create_sample_python_file(
+            tmp_path,
+            "consumer.py",
+            "import pkg.helpers\n",
+        )
+
+        builder = MindmapBuilder()
+        graph = builder.build_from_directory(tmp_path)
+
+        import_edges = [
+            (source, target)
+            for source, target, data in graph.edges(data=True)
+            if data.get("relation") == "imports"
+        ]
+
+        assert ("consumer.py", "pkg/helpers.py") in import_edges
 
