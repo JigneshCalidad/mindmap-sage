@@ -3,8 +3,6 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from mindmap.core import MindmapBuilder
 
 
@@ -107,6 +105,8 @@ def test_import_relationships():
 
         # Check for import edges
         edges = list(graph.edges(data=True))
-        import_edges = [e for _, _, d in edges if d.get("relation") == "imports"]
+        import_edges = [
+            edge for edge in edges if edge[2].get("relation") == "imports"
+        ]
         assert len(import_edges) > 0
 

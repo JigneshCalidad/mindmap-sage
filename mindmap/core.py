@@ -7,7 +7,7 @@ represent relationships (imports, dependencies, containment).
 
 import networkx as nx
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from .parser import Parser
 
@@ -56,19 +56,6 @@ class MindmapBuilder:
                 # Link concept to its file
                 self.graph.add_edge(concept_id, file_node, relation="defined_in")
 
-            # Add import relationships
-            for import_name in file_data.get("imports", []):
-                # Try to find the imported module/file in the graph
-                for node in self.graph.nodes():
-                    if (
-                        self.graph.nodes[node].get("type") == "file"
-                        and import_name in node
-                    ):
-                        self.graph.add_edge(
-                            file_node, node, relation="imports"
-                        )
-                        break
-
         # Add cross-file relationships based on imports
         self._add_import_relationships(parsed_files, root_path)
 
@@ -80,19 +67,7 @@ class MindmapBuilder:
         """Add edges based on import statements."""
         root_path = Path(root_path).resolve()
 
-        # Build a map of module names to file nodes
-        module_to_file = {}
-        for file_data in parsed_files:
-            file_path = Path(file_data["file"])
-            relative_path = file_path.relative_to(root_path)
-            file_node = str(relative_path)
-
-            # Map by filename without extension
-            module_name = file_path.stem
-            module_to_file[module_name] = file_node
-
-            # Also map by full relative path
-            module_to_file[str(relative_path)] = file_node
+        module_to_file = self._build_module_index(parsed_files, root_path)
 
         # Add import edges
         for file_data in parsed_files:
@@ -101,14 +76,96 @@ class MindmapBuilder:
             file_node = str(relative_path)
 
             for import_name in file_data.get("imports", []):
-                # Try to resolve the import
-                base_import = import_name.split(".")[0]
-                if base_import in module_to_file:
-                    imported_file = module_to_file[base_import]
-                    if imported_file != file_node:
-                        self.graph.add_edge(
-                            file_node, imported_file, relation="imports"
-                        )
+                for candidate in self._candidate_import_keys(import_name):
+                    imported_file = module_to_file.get(candidate)
+                    if imported_file and imported_file != file_node:
+                        if not self._has_import_edge(file_node, imported_file):
+                            self.graph.add_edge(
+                                file_node, imported_file, relation="imports"
+                            )
+                        break
+
+    def _build_module_index(
+        self, parsed_files: List[Dict], root_path: Path
+    ) -> Dict[str, str]:
+        """Create a lookup map for resolving module names to file nodes."""
+        module_to_file: Dict[str, str] = {}
+        for file_data in parsed_files:
+            file_path = Path(file_data["file"])
+            relative_path = file_path.relative_to(root_path)
+            file_node = str(relative_path)
+
+            for alias in self._module_aliases(relative_path):
+                module_to_file.setdefault(alias, file_node)
+
+        return module_to_file
+
+    def _module_aliases(self, relative_path: Path) -> List[str]:
+        """Generate alias keys for a file based on common import styles."""
+        without_suffix = relative_path.with_suffix("")
+
+        candidates = [
+            relative_path.as_posix(),
+            str(relative_path),
+            without_suffix.as_posix(),
+            str(without_suffix),
+            ".".join(without_suffix.parts),
+            relative_path.stem,
+        ]
+
+        if relative_path.name == "__init__.py":
+            parent = relative_path.parent
+            if parent != Path("."):
+                candidates.extend(
+                    [
+                        parent.as_posix(),
+                        ".".join(parent.parts),
+                    ]
+                )
+
+        return self._unique_preserve(candidates)
+
+    def _candidate_import_keys(self, import_name: str) -> List[str]:
+        """Generate possible lookup keys for an import statement."""
+        cleaned = import_name.strip()
+        if not cleaned:
+            return []
+
+        parts = cleaned.split(".")
+        candidates: List[str] = []
+
+        for i in range(len(parts), 0, -1):
+            partial = ".".join(parts[:i])
+            slash_partial = "/".join(parts[:i])
+            candidates.extend(
+                [
+                    partial,
+                    f"{partial}.py",
+                    slash_partial,
+                    f"{slash_partial}.py",
+                ]
+            )
+
+        return self._unique_preserve(candidates)
+
+    @staticmethod
+    def _unique_preserve(values: List[str]) -> List[str]:
+        """Deduplicate a list while preserving order."""
+        seen = set()
+        result = []
+        for value in values:
+            normalized = value.strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                result.append(normalized)
+        return result
+
+    def _has_import_edge(self, source: str, target: str) -> bool:
+        """Check if an imports edge already exists between two files."""
+        edge_data = self.graph.get_edge_data(source, target, default=None)
+        if not edge_data:
+            return False
+        return edge_data.get("relation") == "imports"
 
     def get_graph(self) -> nx.DiGraph:
         """Get the current graph."""

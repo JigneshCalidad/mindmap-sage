@@ -7,7 +7,6 @@ and formats it for human-readable visualization.
 
 import networkx as nx
 from pathlib import Path
-from typing import Optional
 
 
 class Exporter:
@@ -36,7 +35,6 @@ class Exporter:
         for node in self.graph.nodes():
             node_data = self.graph.nodes[node]
             node_type = node_data.get("type", "unknown")
-            node_name = node_data.get("name", node)
 
             # Create a safe ID for Mermaid
             node_id = f"node{node_counter}"

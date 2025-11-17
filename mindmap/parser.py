@@ -6,10 +6,9 @@ as a gentle reader that understands code structure without executing it.
 """
 
 import ast
-import os
 import re
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List
 
 
 class Parser:

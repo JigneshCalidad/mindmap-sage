@@ -5,6 +5,7 @@ the mindmap when files are modified, added, or removed. It provides
 a reactive layer that keeps the mindmap in sync with the codebase.
 """
 
+import threading
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -40,13 +41,16 @@ class MindmapWatcher:
         self.observer = None
         self.last_update_time = 0
         self.pending_update = False
+        self._lock = threading.Lock()
+        self._pending_timer: Optional[threading.Timer] = None
 
     def _should_rebuild(self) -> bool:
         """Check if enough time has passed since last update."""
         current_time = time.time()
-        if current_time - self.last_update_time >= self.debounce_seconds:
-            self.last_update_time = current_time
-            return True
+        with self._lock:
+            if current_time - self.last_update_time >= self.debounce_seconds:
+                self.last_update_time = current_time
+                return True
         return False
 
     def _rebuild(self):
@@ -77,9 +81,46 @@ class MindmapWatcher:
 
         # Debounce rapid changes
         if self._should_rebuild():
+            self._cancel_pending_timer()
             self._rebuild()
         else:
+            self._schedule_pending_rebuild()
+
+    def _schedule_pending_rebuild(self):
+        """Schedule a rebuild once the debounce window passes."""
+        with self._lock:
             self.pending_update = True
+            elapsed = time.time() - self.last_update_time
+            remaining = max(self.debounce_seconds - elapsed, 0.01)
+
+            if self._pending_timer:
+                self._pending_timer.cancel()
+
+            self._pending_timer = threading.Timer(
+                remaining,
+                self._flush_pending_rebuild,
+            )
+            self._pending_timer.daemon = True
+            self._pending_timer.start()
+
+    def _flush_pending_rebuild(self):
+        """Execute a delayed rebuild if updates are pending."""
+        with self._lock:
+            if not self.pending_update:
+                return
+            self.pending_update = False
+            self.last_update_time = time.time()
+            self._pending_timer = None
+
+        self._rebuild()
+
+    def _cancel_pending_timer(self):
+        """Cancel any scheduled rebuild."""
+        with self._lock:
+            if self._pending_timer:
+                self._pending_timer.cancel()
+                self._pending_timer = None
+            self.pending_update = False
 
     def start(self):
         """Start watching the directory."""
@@ -102,6 +143,7 @@ class MindmapWatcher:
             self.observer.stop()
             self.observer.join()
             print("Watcher stopped")
+        self._cancel_pending_timer()
 
     def __enter__(self):
         """Context manager entry."""
