@@ -5,6 +5,7 @@ the mindmap when files are modified, added, or removed. It provides
 a reactive layer that keeps the mindmap in sync with the codebase.
 """
 
+import logging
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -13,6 +14,8 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from mindmap.core import MindmapBuilder
+
+logger = logging.getLogger(__name__)
 
 
 class MindmapWatcher:
@@ -58,12 +61,13 @@ class MindmapWatcher:
             if self.on_update:
                 self.on_update(graph)
 
-            print(
-                f"Mindmap updated: {graph.number_of_nodes()} nodes, "
-                f"{graph.number_of_edges()} edges"
+            logger.info(
+                "Mindmap updated: %d nodes, %d edges",
+                graph.number_of_nodes(),
+                graph.number_of_edges()
             )
         except Exception as e:
-            print(f"Error rebuilding mindmap: {e}")
+            logger.error("Error rebuilding mindmap: %s", e, exc_info=True)
 
     def _handle_event(self, event):
         """Handle file system event."""
@@ -94,14 +98,14 @@ class MindmapWatcher:
         # Initial build
         self._rebuild()
 
-        print(f"Watching: {self.repo_path}")
+        logger.info("Watching: %s", self.repo_path)
 
     def stop(self):
         """Stop watching."""
         if self.observer:
             self.observer.stop()
             self.observer.join()
-            print("Watcher stopped")
+            logger.info("Watcher stopped")
 
     def __enter__(self):
         """Context manager entry."""
