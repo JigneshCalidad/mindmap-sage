@@ -1,0 +1,2 @@
+"""Sample repository for testing."""
+
